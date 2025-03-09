@@ -3,20 +3,20 @@
 
 """
 Exemple de script Python combinant :
-  - la création d'un dataset plus riche (multi-label) pour l'entraînement,
+  - la création d'un grand dataset synthétique (multi-label) pour l'entraînement,
   - l'entraînement d'un Classifier Chain,
   - un scan Nmap sur une machine pour détecter les ports ouverts,
   - la prédiction des labels (processus métiers) en fonction des ports détectés.
 
 Prérequis :
-  - Avoir Nmap installé (apt-get install nmap).
-  - Avoir python-nmap (pip install python-nmap).
-  - Avoir scikit-learn, pandas, numpy (pip install scikit-learn pandas numpy).
+  - Avoir Nmap installé (ex : sudo apt-get install nmap).
+  - Installer python-nmap (pip install python-nmap).
+  - Installer scikit-learn, pandas, numpy (pip install scikit-learn pandas numpy).
   - Selon le type de scan, exécuter le script en sudo.
 
 Auteurs / Sources :
  - python-nmap : https://pypi.org/project/python-nmap/
- - Multi-label scikit-learn : https://scikit-learn.org/stable/modules/multiclass.html#multi-label-classification
+ - Scikit-learn Multi-label : https://scikit-learn.org/stable/modules/multiclass.html#multi-label-classification
  - Tsoumakas, G. & Katakis, I. (2007). "Multi-Label Classification: An Overview"
  - Read, J. et al. (2009). "Classifier chains for multi-label classification"
 """
@@ -24,253 +24,90 @@ Auteurs / Sources :
 import nmap
 import pandas as pd
 import numpy as np
+import random
 
 from sklearn.multioutput import ClassifierChain
 from sklearn.linear_model import LogisticRegression
 
 # -----------------------------------------------------------------------------
-# 1) DATASET : création d'un dataset plus riche (multi-label)
+# 1) DATASET : création d'un grand dataset synthétique (multi-label)
 # -----------------------------------------------------------------------------
-def create_rich_training_dataset():
+def create_large_training_dataset(n=250, seed=42):
     """
-    Génère un DataFrame simulant ~15 machines, chacune avec :
-      - machine (str)
-      - ports_ouverts (list[int])
-      - labels (dict[str, bool]) 
-        -> 7 labels potentiels: Web, BaseDeDonnees, Messagerie,
-                               Fichier, DNS, Monitoring, Proxy
-
+    Génère un DataFrame simulant n machines, chacune avec :
+      - machine : une adresse IP fictive
+      - ports_ouverts : une liste aléatoire de ports ouverts
+      - labels : dictionnaire indiquant True/False pour 7 rôles/services
+         -> Labels : Web, BaseDeDonnees, Messagerie, Fichier, DNS, Monitoring, Proxy
+    La génération est aléatoire à partir d'un dictionnaire de ports caractéristiques.
     Retourne un DataFrame.
     """
-    train_data = [
-        {
-            'machine': '192.168.0.101',
-            'ports_ouverts': [80, 443],
-            'labels': {
-                'Web': True,
-                'BaseDeDonnees': False,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.102',
-            'ports_ouverts': [3306, 22],
-            'labels': {
-                'Web': False,
-                'BaseDeDonnees': True,
-                'Messagerie': False,
-                'Fichier': True,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.103',
-            'ports_ouverts': [445, 139],
-            'labels': {
-                'Web': False,
-                'BaseDeDonnees': False,
-                'Messagerie': False,
-                'Fichier': True,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.104',
-            'ports_ouverts': [25, 110, 143],
-            'labels': {
-                'Web': False,
-                'BaseDeDonnees': False,
-                'Messagerie': True,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.105',
-            'ports_ouverts': [80, 443, 3306],
-            'labels': {
-                'Web': True,
-                'BaseDeDonnees': True,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.106',
-            'ports_ouverts': [80, 25, 445, 139],
-            'labels': {
-                'Web': True,
-                'BaseDeDonnees': False,
-                'Messagerie': True,
-                'Fichier': True,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.107',
-            'ports_ouverts': [53],
-            'labels': {
-                'Web': False,
-                'BaseDeDonnees': False,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': True,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.108',
-            'ports_ouverts': [8080, 3128],
-            'labels': {
-                'Web': True,
-                'BaseDeDonnees': False,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': True
-            }
-        },
-        {
-            'machine': '192.168.0.109',
-            'ports_ouverts': [161, 162],
-            'labels': {
-                'Web': False,
-                'BaseDeDonnees': False,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': True,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.110',
-            'ports_ouverts': [3000, 22],
-            'labels': {
-                'Web': False,
-                'BaseDeDonnees': False,
-                'Messagerie': False,
-                'Fichier': True,
-                'DNS': False,
-                'Monitoring': True,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.111',
-            'ports_ouverts': [9090, 5432],
-            'labels': {
-                'Web': False,
-                'BaseDeDonnees': True,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': True,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.112',
-            'ports_ouverts': [27017, 80],
-            'labels': {
-                'Web': True,
-                'BaseDeDonnees': True,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.113',
-            'ports_ouverts': [8443, 53],
-            'labels': {
-                'Web': True,
-                'BaseDeDonnees': False,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': True,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.114',
-            'ports_ouverts': [143, 993, 587],
-            'labels': {
-                'Web': False,
-                'BaseDeDonnees': False,
-                'Messagerie': True,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': False
-            }
-        },
-        {
-            'machine': '192.168.0.115',
-            'ports_ouverts': [8080, 8081, 3128, 443],
-            'labels': {
-                'Web': True,
-                'BaseDeDonnees': False,
-                'Messagerie': False,
-                'Fichier': False,
-                'DNS': False,
-                'Monitoring': False,
-                'Proxy': True
-            }
-        },
-    ]
-
-    df = pd.DataFrame(train_data)
-    return df
+    random.seed(seed)
+    
+    # Dictionnaire des ports caractéristiques pour chaque label
+    possible_ports = {
+        "Web": [80, 443, 8080, 8443],
+        "BaseDeDonnees": [3306, 5432, 27017],
+        "Messagerie": [25, 465, 587, 110, 143, 993],
+        "Fichier": [21, 22, 445, 139],
+        "DNS": [53],
+        "Monitoring": [161, 162, 3000, 9090],
+        "Proxy": [3128]
+    }
+    
+    # Création de l'ensemble de tous les ports possibles
+    all_possible_ports = set()
+    for plist in possible_ports.values():
+        all_possible_ports.update(plist)
+    all_possible_ports = list(all_possible_ports)
+    
+    def assign_labels(ports_list):
+        """Assigne True pour un label si au moins un port caractéristique est présent."""
+        labels = {}
+        for label, plist in possible_ports.items():
+            labels[label] = any(p in ports_list for p in plist)
+        return labels
+    
+    data = []
+    for i in range(n):
+        machine_ip = f"192.168.0.{0 + i}"
+        # Choisit aléatoirement entre 1 et min(7, len(all_possible_ports)) ports
+        num_ports = random.randint(1, min(7, len(all_possible_ports)))
+        ports_list = random.sample(all_possible_ports, num_ports)
+        ports_list = sorted(ports_list)
+        labels = assign_labels(ports_list)
+        data.append({
+            "machine": machine_ip,
+            "ports_ouverts": ports_list,
+            "labels": labels
+        })
+    return pd.DataFrame(data)
 
 # -----------------------------------------------------------------------------
-# 2) FONCTIONS UTILES : transformation ports -> features, labels -> y, etc.
+# 2) FONCTIONS UTILES : transformation des données (ports -> features, labels -> matrice)
 # -----------------------------------------------------------------------------
 def ports_to_features(ports_list, all_ports_sorted):
     """
-    Convertit la liste 'ports_list' en vecteur binaire, 
+    Convertit la liste 'ports_list' en vecteur binaire,
     en se basant sur la liste ordonnée 'all_ports_sorted'.
     """
     return [1 if p in ports_list else 0 for p in all_ports_sorted]
 
 def build_feature_matrix(df, all_ports_sorted):
     """
-    Applique ports_to_features à la colonne 'ports_ouverts' d'un DataFrame df.
-    Retourne une matrice NumPy de dimension (nb_machines, nb_ports).
+    Transforme la colonne 'ports_ouverts' d'un DataFrame en une matrice NumPy.
+    Chaque machine est représentée par un vecteur binaire indiquant l'ouverture de chaque port.
     """
     if df.empty:
         return np.empty((0, len(all_ports_sorted)))
-    features_series = df['ports_ouverts'].apply(
-        lambda pl: ports_to_features(pl, all_ports_sorted)
-    )
+    features_series = df['ports_ouverts'].apply(lambda pl: ports_to_features(pl, all_ports_sorted))
     X = np.vstack(features_series.values)
     return X
 
 def build_label_matrix(df, label_columns):
     """
-    Convertit la colonne 'labels' (dictionnaire) d'un DataFrame 
-    en colonnes distinctes, selon label_columns (liste d'étiquettes).
-    Retourne (y, label_columns) où y est un numpy array 0/1.
+    Convertit la colonne 'labels' (dictionnaire) d'un DataFrame en un tableau NumPy de 0/1,
+    avec les colonnes dans l'ordre défini par label_columns.
     """
     df_labels = pd.json_normalize(df['labels'])
     for col in label_columns:
@@ -281,15 +118,11 @@ def build_label_matrix(df, label_columns):
 
 def train_classifier_chains(X_train, y_train):
     """
-    Entraîne un modèle ClassifierChain à partir de X_train, y_train.
-    Retourne le modèle.
+    Entraîne un modèle ClassifierChain à partir de X_train et y_train.
+    Retourne le modèle entraîné.
     """
     base_estimator = LogisticRegression()
-    model = ClassifierChain(
-        base_estimator=base_estimator, 
-        order='random', 
-        random_state=42
-    )
+    model = ClassifierChain(base_estimator=base_estimator, order='random', random_state=42)
     model.fit(X_train, y_train)
     return model
 
@@ -299,10 +132,10 @@ def train_classifier_chains(X_train, y_train):
 def launch_nmap_scan(ip_address, port_range, options):
     """
     Lance un scan Nmap sur ip_address, pour la plage de ports port_range,
-    en utilisant la chaîne 'options'.
-    Retourne le dict de python-nmap.
+    en utilisant les options fournies.
+    Retourne le dictionnaire renvoyé par python-nmap.
     
-    Ex:
+    Exemple :
        nm.scan(
          hosts='192.168.0.80',
          arguments='-sV -Pn -p 1-4096'
@@ -316,9 +149,8 @@ def launch_nmap_scan(ip_address, port_range, options):
 
 def parse_scan_result(scan_result):
     """
-    Parcourt le résultat python-nmap et retourne un DataFrame 
-    avec colonnes:
-      - machine
+    Parcourt le résultat du scan Nmap et retourne un DataFrame avec :
+      - machine (str)
       - ports_ouverts (list[int])
     """
     hosts_data = []
@@ -341,39 +173,38 @@ def parse_scan_result(scan_result):
 # 4) MAIN : Enchaînement complet
 # -----------------------------------------------------------------------------
 def main():
-    # (A) Création / chargement du dataset de training
-    df_train = create_rich_training_dataset()
-    print("[INFO] Dataset d'entraînement créé :")
+    # (A) Création du dataset de training (grande échelle)
+    df_train = create_large_training_dataset(n=200, seed=42)
+    print("[INFO] Dataset d'entraînement généré :")
     print(df_train)
 
-    # On liste tous les ports vus dans ce dataset
+    # On récupère la liste de tous les ports présents dans le dataset
     all_ports_train = set()
-    for ports_l in df_train['ports_ouverts']:
-        all_ports_train.update(ports_l)
+    for ports_list in df_train['ports_ouverts']:
+        all_ports_train.update(ports_list)
     all_ports_train = sorted(list(all_ports_train))
     
     print("\n[INFO] Ports possibles dans le training :", all_ports_train)
 
-    # On construit X_train
+    # Construction de la matrice de features X_train
     X_train = build_feature_matrix(df_train, all_ports_train)
 
-    # On définit les labels qu'on veut prédire
+    # Définition des labels à prédire
     label_cols = ["Web", "BaseDeDonnees", "Messagerie", "Fichier", "DNS", "Monitoring", "Proxy"]
     y_train, label_cols = build_label_matrix(df_train, label_cols)
+    print(f"\n[INFO] X_train shape = {X_train.shape}, y_train shape = {y_train.shape}")
 
-    print(f"[INFO] X_train shape = {X_train.shape}, y_train shape = {y_train.shape}")
-
-    # (B) Entraînement du modèle ClassifierChain
+    # (B) Entraînement du modèle Classifier Chain
     model_cc = train_classifier_chains(X_train, y_train)
     print("[INFO] Modèle Classifier Chain entraîné !")
 
-    # (C) Lance un scan Nmap sur la cible
-    TARGET_IP = input("IP to scan : ")  # A adapter
-    PORT_RANGE = input("Port range Ex : 1-65535 : ")
-    SCAN_OPTIONS = input("Options Ex : -sV : ")    # -Pn pour ignorer ping, -sV pour détection de version
+    # (C) Lancer un scan Nmap sur la cible
+    TARGET_IP = input("IP to scan : ")  # Par exemple, 192.168.0.80
+    PORT_RANGE = input("Port range (e.g., 1-65535) : ")
+    SCAN_OPTIONS = input("Scan options (e.g., -sV -Pn -sT) : ")
     scan_result = launch_nmap_scan(TARGET_IP, PORT_RANGE, SCAN_OPTIONS)
 
-    # (D) Parse le résultat du scan
+    # (D) Parser le résultat du scan
     df_scan = parse_scan_result(scan_result)
     if df_scan.empty:
         print("[WARNING] Aucune machine détectée 'up' ou aucun port ouvert !")
@@ -383,8 +214,8 @@ def main():
     print("\n[INFO] Résultat du scan :")
     print(df_scan)
 
-    # (E) On construit les features à partir des ports scannés
-    #     (Important : on réutilise la même liste 'all_ports_train' qu'à l'entraînement)
+    # (E) Construire les features à partir des ports scannés
+    # (Utilisation de la même liste 'all_ports_train' que pour l'entraînement)
     X_new = build_feature_matrix(df_scan, all_ports_train)
     print(f"[INFO] X_new shape = {X_new.shape} pour {len(df_scan)} machine(s) scannée(s).")
 
@@ -405,4 +236,3 @@ def main():
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
     main()
-
