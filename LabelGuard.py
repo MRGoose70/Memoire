@@ -32,7 +32,7 @@ from sklearn.linear_model import LogisticRegression
 # -----------------------------------------------------------------------------
 # 1) DATASET : création d'un grand dataset synthétique (multi-label)
 # -----------------------------------------------------------------------------
-def create_large_training_dataset(n=250, seed=42):
+def create_large_training_dataset(n=254, seed=42):
     """
     Génère un DataFrame simulant n machines, chacune avec :
       - machine : une adresse IP fictive
@@ -52,7 +52,10 @@ def create_large_training_dataset(n=250, seed=42):
         "Fichier": [21, 22, 445, 139],
         "DNS": [53],
         "Monitoring": [161, 162, 3000, 9090],
-        "Proxy": [3128]
+        "Proxy": [3128],
+        "Odoo": [8069, 8071, 8072],
+        "ERPNext": [8000, 8001, 8002],
+        "Metabase": [3000, 3001, 3002]
     }
     
     # Création de l'ensemble de tous les ports possibles
@@ -190,7 +193,7 @@ def main():
     X_train = build_feature_matrix(df_train, all_ports_train)
 
     # Définition des labels à prédire
-    label_cols = ["Web", "BaseDeDonnees", "Messagerie", "Fichier", "DNS", "Monitoring", "Proxy"]
+    label_cols = ["Web", "BaseDeDonnees", "Messagerie", "Fichier", "DNS", "Monitoring", "Proxy", "Odoo", "ERPNext", "Metabase"]
     y_train, label_cols = build_label_matrix(df_train, label_cols)
     print(f"\n[INFO] X_train shape = {X_train.shape}, y_train shape = {y_train.shape}")
 
