@@ -32,7 +32,7 @@ from sklearn.linear_model import LogisticRegression
 # -----------------------------------------------------------------------------
 # 1) DATASET : création d'un grand dataset synthétique (multi-label)
 # -----------------------------------------------------------------------------
-def create_large_training_dataset(n=254, seed=42):
+def create_large_training_dataset(n=2000, seed=42):
     """
     Génère un DataFrame simulant n machines, chacune avec :
       - machine : une adresse IP fictive
