@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Script amélioré pour :
-  - Générer un dataset multi-label de grande taille (n=2000)
-  - Entraîner un modèle Classifier Chain
-  - Évaluer le modèle par validation croisée (5-fold) et via un split train/test
-  - Lancer un scan Nmap et prédire les labels sur de nouvelles machines
+  - Générer un dataset multi-label de machines et assigner un besoin métier en fonction des labels détectés.
+  - Entraîner un modèle Classifier Chain sur le dataset.
+  - Évaluer le modèle via validation croisée (5-fold) et via un split train/test.
+  - Lancer un scan Nmap et prédire les labels ainsi que les besoins métiers sur de nouvelles machines.
 
 Sources :
- - Code initial fourni dans LabelGuard.py :contentReference[oaicite:0]{index=0}
+ - Code initial fourni dans LabelGuard.py :contentReference[oaicite:1]{index=1}
  - Documentation scikit-learn : https://scikit-learn.org/stable/modules/model_evaluation.html
 """
 
@@ -22,9 +22,58 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split, cross_val_score, KFold
 from sklearn.metrics import accuracy_score, confusion_matrix
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Mapping entre labels et besoins métiers
+# ---------------------------------------------------------------------------
+label_to_need = {
+    "Web": "Hébergement Web",
+    "BaseDeDonnees": "Gestion de données",
+    "Messagerie": "Service de messagerie",
+    "Fichier": "Stockage de fichiers",
+    "DNS": "Gestion DNS",
+    "Monitoring": "Surveillance de l'infrastructure",
+    "Proxy": "Sécurité et proxy",
+    "Odoo": "ERP / Gestion d'entreprise",
+    "ERPNext": "ERP / Gestion d'entreprise",
+    "Metabase": "Business Intelligence",
+    "Bob50": "Application métier Bob50",
+    "HyperPlanning": "Gestion de planning"
+}
+
+def assign_business_need(labels: dict) -> list:
+    """
+    Assigne un ou plusieurs besoins métiers en fonction des labels fournis.
+    
+    Pour chaque label à True dans le dictionnaire, retourne le besoin métier correspondant.
+    Si aucun label n'est détecté, un besoin par défaut est assigné.
+    
+    :param labels: Dictionnaire des labels avec des valeurs booléennes.
+    :return: Liste de besoins métiers associés.
+    """
+    needs = []
+    for label, is_present in labels.items():
+        if is_present:
+            need = label_to_need.get(label)
+            if need and need not in needs:
+                needs.append(need)
+    if not needs:
+        needs.append("Aucun besoin métier assigné")
+    return needs
+
+def add_business_need_column(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ajoute une colonne 'besoin_metier' au DataFrame, basée sur la colonne 'labels'.
+    
+    :param df: DataFrame contenant une colonne 'labels' avec des dictionnaires.
+    :return: DataFrame enrichi d'une colonne 'besoin_metier' contenant la liste des besoins métiers.
+    """
+    df = df.copy()
+    df["besoin_metier"] = df["labels"].apply(assign_business_need)
+    return df
+
+# ---------------------------------------------------------------------------
 # 1) Création du dataset synthétique multi-label
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def create_large_training_dataset(n=2000, seed=42):
     """
     Génère un DataFrame simulant n machines avec :
@@ -32,6 +81,8 @@ def create_large_training_dataset(n=2000, seed=42):
       - ports_ouverts : une liste aléatoire de ports ouverts,
       - labels : dictionnaire indiquant True/False pour plusieurs services.
     Retourne un DataFrame.
+    
+    Reprend le code du script LabelGuard.py :contentReference[oaicite:2]{index=2}.
     """
     random.seed(seed)
     
@@ -67,7 +118,6 @@ def create_large_training_dataset(n=2000, seed=42):
     data = []
     for i in range(n):
         machine_ip = f"192.168.0.{i}"
-        # Choisit aléatoirement entre 1 et min(7, len(all_possible_ports)) ports
         num_ports = random.randint(1, min(7, len(all_possible_ports)))
         ports_list = random.sample(all_possible_ports, num_ports)
         ports_list = sorted(ports_list)
@@ -79,9 +129,9 @@ def create_large_training_dataset(n=2000, seed=42):
         })
     return pd.DataFrame(data)
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # 2) Fonctions utilitaires pour la transformation des données
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def ports_to_features(ports_list, all_ports_sorted):
     """
     Convertit la liste 'ports_list' en vecteur binaire,
@@ -122,9 +172,9 @@ def train_classifier_chains(X_train, y_train):
     model.fit(X_train, y_train)
     return model
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # 3) Fonctions Nmap pour lancer un scan et parser le résultat
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def launch_nmap_scan(ip_address, port_range, options):
     """
     Lance un scan Nmap sur ip_address pour la plage de ports port_range,
@@ -158,13 +208,16 @@ def parse_scan_result(scan_result):
             })
     return pd.DataFrame(hosts_data)
 
-# -----------------------------------------------------------------------------
-# 4) Main : Enchaînement complet avec validation croisée et scan Nmap
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 4) Main : Enchaînement complet avec validation croisée, scan Nmap et assignation des besoins métiers
+# ---------------------------------------------------------------------------
 def main():
     # (A) Création du dataset avec n=2000 échantillons
     df_train = create_large_training_dataset(n=2000, seed=42)
     print(f"[INFO] Dataset d'entraînement généré (taille = {df_train.shape[0]})")
+    
+    # Optionnel : Ajout de la colonne 'besoin_metier' dans le dataset d'entraînement
+    df_train = add_business_need_column(df_train)
     
     # Récupération de tous les ports présents dans le dataset
     all_ports_train = set()
@@ -180,9 +233,9 @@ def main():
     y, label_cols = build_label_matrix(df_train, label_cols)
     print(f"\n[INFO] X shape = {X.shape}, y shape = {y.shape}")
 
-    # -----------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # Évaluation par validation croisée (5-fold)
-    # -----------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     model_cc = ClassifierChain(base_estimator=LogisticRegression(max_iter=1000), 
                                  order='random', random_state=42)
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -206,9 +259,9 @@ def main():
             tn, fp, fn, tp = cm.ravel()
             print(f"{label} : TP={tp}, TN={tn}, FP={fp}, FN={fn}")
 
-    # -----------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # Partie scan Nmap et prédiction sur de nouvelles machines
-    # -----------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     TARGET_IP = input("IP à scanner : ")  # Ex : 192.168.0.183
     PORT_RANGE = input("Plage de ports (ex: 1-65535) : ")
     SCAN_OPTIONS = input("Options de scan (ex: -sV -Pn -sT) : ")
@@ -231,9 +284,11 @@ def main():
         machine = row['machine']
         pred_vector = y_pred_new[i]
         labels_dict = {label_cols[j]: bool(pred_vector[j]) for j in range(len(label_cols))}
+        business_needs = assign_business_need(labels_dict)
         print(f"\n=== Machine: {machine} ===")
         print(f"Ports ouverts: {row['ports_ouverts']}")
         print(f"Labels prédits: {labels_dict}")
+        print(f"Besoins métiers assignés: {business_needs}")
 
 if __name__ == "__main__":
     main()
