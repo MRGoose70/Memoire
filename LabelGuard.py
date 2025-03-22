@@ -12,9 +12,12 @@ Script amélioré pour :
 
 Sources :
  - Code initial fourni dans LabelGuard.py :contentReference[oaicite:0]{index=0}&#8203;:contentReference[oaicite:1]{index=1}
+ - Documentation sur la gestion des exceptions : https://docs.python.org/fr/3/tutorial/errors.html
+ - PEP8 – Style Guide for Python Code : https://www.python.org/dev/peps/pep-0008/
  - Documentation Nmap NSE : https://nmap.org/book/nse.html
 """
 
+import re
 import nmap
 import pandas as pd
 import numpy as np
@@ -27,7 +30,7 @@ from sklearn.model_selection import train_test_split, cross_val_score, KFold
 from sklearn.metrics import accuracy_score, confusion_matrix
 
 # ----------------------------------------------------------------------------
-# Fonction d'affichage joli
+# Fonctions utilitaires d'affichage et de validation
 # ----------------------------------------------------------------------------
 def pretty_print_dict(d, title=""):
     """
@@ -35,10 +38,80 @@ def pretty_print_dict(d, title=""):
     Optionnellement, affiche un titre au-dessus.
     """
     if title:
-        print("\n" + "="*len(title))
+        print("\n" + "=" * len(title))
         print(title)
-        print("="*len(title))
+        print("=" * len(title))
     print(json.dumps(d, indent=2, ensure_ascii=False))
+
+
+def validate_ip(ip):
+    """
+    Valide qu'une chaîne de caractères correspond bien à une adresse IPv4.
+    """
+    pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    if re.match(pattern, ip):
+        return all(0 <= int(octet) <= 255 for octet in ip.split('.'))
+    return False
+
+
+def get_ip_input(prompt):
+    """
+    Demande à l'utilisateur une adresse IP jusqu'à obtenir une valeur valide.
+    """
+    while True:
+        ip = input(prompt)
+        if validate_ip(ip):
+            return ip
+        else:
+            print("[ERROR] Format d'IP invalide. Veuillez réessayer.")
+
+
+def validate_port_range(port_range):
+    """
+    Valide que la plage de ports est au format 'start-end' avec des valeurs entre 1 et 65535.
+    """
+    pattern = r'^\d{1,5}-\d{1,5}$'
+    if re.match(pattern, port_range):
+        start, end = map(int, port_range.split('-'))
+        if 1 <= start <= end <= 65535:
+            return True
+    return False
+
+
+def get_port_range_input(prompt):
+    """
+    Demande à l'utilisateur une plage de ports jusqu'à obtenir une valeur valide.
+    """
+    while True:
+        port_range = input(prompt)
+        if validate_port_range(port_range):
+            return port_range
+        else:
+            print("[ERROR] Format de plage de ports invalide. Utilisez le format 'start-end' avec des valeurs entre 1 et 65535.")
+
+
+def get_scan_options_input(prompt):
+    """
+    Demande à l'utilisateur les options de scan jusqu'à obtenir une chaîne non vide.
+    """
+    while True:
+        options = input(prompt)
+        if options.strip():
+            return options
+        else:
+            print("[ERROR] Les options de scan ne peuvent pas être vides.")
+
+
+def get_nse_script_input(prompt):
+    """
+    Demande à l'utilisateur le nom du script NSE jusqu'à obtenir une chaîne non vide.
+    """
+    while True:
+        script = input(prompt)
+        if script.strip():
+            return script
+        else:
+            print("[ERROR] Le nom du script NSE ne peut pas être vide.")
 
 
 # ----------------------------------------------------------------------------
@@ -92,7 +165,6 @@ def create_large_training_dataset(n=2000, seed=42):
       - machine : une adresse IP fictive,
       - ports_ouverts : une liste aléatoire de ports ouverts,
       - labels : dictionnaire indiquant True/False pour plusieurs services.
-    Reprend le code du script LabelGuard.py :contentReference[oaicite:2]{index=2}&#8203;:contentReference[oaicite:3]{index=3}.
     """
     random.seed(seed)
     possible_ports = {
@@ -179,25 +251,33 @@ def train_classifier_chains(X_train, y_train):
 def launch_nmap_scan(ip_address, port_range, options):
     """
     Lance un scan Nmap sur l'IP et la plage de ports spécifiée.
+    Gère les exceptions pour éviter tout crash.
     """
-    nm = nmap.PortScanner()
-    cmd_args = f"{options} -p {port_range}"
-    print(f"\n[INFO] Lancement du scan Nmap sur {ip_address} avec : '{cmd_args}'")
-    scan_result = nm.scan(hosts=ip_address, arguments=cmd_args)
-    return scan_result
+    try:
+        nm = nmap.PortScanner()
+        cmd_args = f"{options} -p {port_range}"
+        print(f"\n[INFO] Lancement du scan Nmap sur {ip_address} avec : '{cmd_args}'")
+        scan_result = nm.scan(hosts=ip_address, arguments=cmd_args)
+        return scan_result
+    except Exception as e:
+        print(f"[ERROR] Erreur lors du scan Nmap : {e}")
+        return {}  # Retourne un résultat vide en cas d'erreur
+
 
 def parse_scan_result(scan_result):
     """
     Parse le résultat du scan Nmap et retourne un DataFrame.
+    Vérifie l'existence des clés attendues pour éviter des KeyError.
     """
     hosts_data = []
-    for host in scan_result.get('scan', {}):
-        host_status = scan_result['scan'][host]['status']['state']
-        if host_status == 'up':
+    scan_data = scan_result.get('scan', {})
+    for host, host_info in scan_data.items():
+        status = host_info.get('status', {}).get('state', 'down')
+        if status == 'up':
             ports_ouverts = []
-            tcp_data = scan_result['scan'][host].get('tcp', {})
+            tcp_data = host_info.get('tcp', {})
             for port, pdata in tcp_data.items():
-                if pdata['state'] == 'open':
+                if pdata.get('state') == 'open':
                     ports_ouverts.append(port)
             hosts_data.append({
                 'machine': host,
@@ -209,108 +289,120 @@ def launch_nmap_security_scan(ip_address, port_range, nse_script):
     """
     Lance un scan de sécurité Nmap en utilisant un script NSE.
     Utilise un scan TCP connect (-sT) avec -Pn pour désactiver la découverte d'hôte.
+    Gère les exceptions pour éviter tout crash.
     """
-    nm = nmap.PortScanner()
-    cmd_args = f"-sT -sV -Pn --script={nse_script} -p {port_range}"
-    print(f"\n[INFO] Lancement du scan de sécurité sur {ip_address} avec : '{cmd_args}'")
-    scan_result = nm.scan(hosts=ip_address, arguments=cmd_args)
-    return scan_result
+    try:
+        nm = nmap.PortScanner()
+        cmd_args = f"-sT -sV -Pn --script={nse_script} -p {port_range}"
+        print(f"\n[INFO] Lancement du scan de sécurité sur {ip_address} avec : '{cmd_args}'")
+        scan_result = nm.scan(hosts=ip_address, arguments=cmd_args)
+        return scan_result
+    except Exception as e:
+        print(f"[ERROR] Erreur lors du scan de sécurité Nmap : {e}")
+        return {}  # Retourne un résultat vide en cas d'erreur
+
 
 # ----------------------------------------------------------------------------
 # 4) Main : Enchaînement complet avec validation croisée, scan Nmap et affichage soigné
 # ----------------------------------------------------------------------------
 def main():
-    # Création du dataset
-    df_train = create_large_training_dataset(n=2000, seed=42)
-    print(f"\n[INFO] Dataset d'entraînement généré (taille = {df_train.shape[0]})")
+    try:
+        # Création du dataset
+        df_train = create_large_training_dataset(n=2000, seed=42)
+        print(f"\n[INFO] Dataset d'entraînement généré (taille = {df_train.shape[0]})")
     
-    # Ajout de la colonne 'besoin_metier'
-    df_train = add_business_need_column(df_train)
+        # Ajout de la colonne 'besoin_metier'
+        df_train = add_business_need_column(df_train)
     
-    # Récupération des ports présents dans le dataset
-    all_ports_train = set()
-    for ports_list in df_train['ports_ouverts']:
-        all_ports_train.update(ports_list)
-    all_ports_train = sorted(list(all_ports_train))
-    print("\n[INFO] Ports possibles dans le dataset :", all_ports_train)
+        # Récupération des ports présents dans le dataset
+        all_ports_train = set()
+        for ports_list in df_train['ports_ouverts']:
+            all_ports_train.update(ports_list)
+        all_ports_train = sorted(list(all_ports_train))
+        print("\n[INFO] Ports possibles dans le dataset :", all_ports_train)
     
-    # Construction des matrices de features et labels
-    label_cols = ["Web", "BaseDeDonnees", "Messagerie", "Fichier", "DNS", "Monitoring",
-                  "Proxy", "Odoo", "ERPNext", "Metabase", "Bob50", "HyperPlanning"]
-    X = build_feature_matrix(df_train, all_ports_train)
-    y, label_cols = build_label_matrix(df_train, label_cols)
-    print(f"\n[INFO] X shape = {X.shape}, y shape = {y.shape}")
+        # Construction des matrices de features et labels
+        label_cols = ["Web", "BaseDeDonnees", "Messagerie", "Fichier", "DNS", "Monitoring",
+                      "Proxy", "Odoo", "ERPNext", "Metabase", "Bob50", "HyperPlanning"]
+        X = build_feature_matrix(df_train, all_ports_train)
+        y, label_cols = build_label_matrix(df_train, label_cols)
+        print(f"\n[INFO] X shape = {X.shape}, y shape = {y.shape}")
     
-    # Validation croisée (5-fold)
-    model_cc = ClassifierChain(base_estimator=LogisticRegression(max_iter=1000), 
-                                 order='random', random_state=42)
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    cv_scores = cross_val_score(model_cc, X, y, cv=kf, scoring='accuracy')
-    print(f"\n[INFO] Accuracy moyenne en validation croisée (5-fold) : {cv_scores.mean():.4f}")
+        # Validation croisée (5-fold)
+        model_cc = ClassifierChain(base_estimator=LogisticRegression(max_iter=1000),
+                                     order='random', random_state=42)
+        kf = KFold(n_splits=5, shuffle=True, random_state=42)
+        cv_scores = cross_val_score(model_cc, X, y, cv=kf, scoring='accuracy')
+        print(f"\n[INFO] Accuracy moyenne en validation croisée (5-fold) : {cv_scores.mean():.4f}")
     
-    # Séparation train/test et entraînement
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model_cc = train_classifier_chains(X_train, y_train)
-    y_pred = model_cc.predict(X_test)
-    acc = accuracy_score(y_test, y_pred)
-    print(f"\n[INFO] Accuracy sur jeu de test (20%) : {acc:.4f}")
+        # Séparation train/test et entraînement
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        model_cc = train_classifier_chains(X_train, y_train)
+        y_pred = model_cc.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        print(f"\n[INFO] Accuracy sur jeu de test (20%) : {acc:.4f}")
     
-    # Affichage des matrices de confusion par label
-    print("\n[INFO] Matrices de confusion par label :")
-    for idx, label in enumerate(label_cols):
-        cm = confusion_matrix(y_test[:, idx], y_pred[:, idx])
-        if cm.size == 1:
-            print(f"{label} : {cm[0, 0]} (valeur unique)")
-        else:
-            tn, fp, fn, tp = cm.ravel()
-            print(f"{label} : TP={tp}, TN={tn}, FP={fp}, FN={fn}")
+        # Affichage des matrices de confusion par label
+        print("\n[INFO] Matrices de confusion par label :")
+        for idx, label in enumerate(label_cols):
+            cm = confusion_matrix(y_test[:, idx], y_pred[:, idx])
+            if cm.size == 1:
+                print(f"{label} : {cm[0, 0]} (valeur unique)")
+            else:
+                tn, fp, fn, tp = cm.ravel()
+                print(f"{label} : TP={tp}, TN={tn}, FP={fp}, FN={fn}")
     
-    # ----------------------------------------------------------------------------
-    # Scan Nmap classique et prédiction sur de nouvelles machines
-    # ----------------------------------------------------------------------------
-    TARGET_IP = input("\nIP à scanner : ")  # Ex : 192.168.0.183
-    PORT_RANGE = input("Plage de ports (ex: 1-65535) : ")
-    SCAN_OPTIONS = input("Options de scan (ex: -sV -Pn -sT) : ")
-    scan_result = launch_nmap_scan(TARGET_IP, PORT_RANGE, SCAN_OPTIONS)
+        # ----------------------------------------------------------------------------
+        # Scan Nmap classique et prédiction sur de nouvelles machines
+        # ----------------------------------------------------------------------------
+        TARGET_IP = get_ip_input("\nIP à scanner : ")  # Exemple : 192.168.0.183
+        PORT_RANGE = get_port_range_input("Plage de ports (ex: 1-65535) : ")
+        SCAN_OPTIONS = get_scan_options_input("Options de scan (ex: -sV -Pn -sT) : ")
     
-    df_scan = parse_scan_result(scan_result)
-    if df_scan.empty:
-        print("\n[WARNING] Aucune machine détectée 'up' ou aucun port ouvert !")
-        print("[HINT] Vérifiez l'IP, ajoutez -Pn, exécutez en sudo, etc.")
-        return
+        scan_result = launch_nmap_scan(TARGET_IP, PORT_RANGE, SCAN_OPTIONS)
+        df_scan = parse_scan_result(scan_result)
     
-    print("\n[INFO] Résultat du scan classique :")
-    print(df_scan)
+        if df_scan.empty:
+            print("\n[WARNING] Aucune machine détectée 'up' ou aucun port ouvert !")
+            print("[HINT] Vérifiez l'IP, ajoutez -Pn, exécutez en sudo, etc.")
+            return
     
-    X_new = build_feature_matrix(df_scan, all_ports_train)
-    print(f"\n[INFO] X_new shape = {X_new.shape} pour {len(df_scan)} machine(s) scannée(s).")
+        print("\n[INFO] Résultat du scan classique :")
+        print(df_scan)
     
-    y_pred_new = model_cc.predict(X_new)
-    for i, row in df_scan.iterrows():
-        machine = row['machine']
-        pred_vector = y_pred_new[i]
-        labels_dict = {label_cols[j]: bool(pred_vector[j]) for j in range(len(label_cols))}
-        business_needs = assign_business_need(labels_dict)
-        print("\n" + "="*50)
-        print(f"Machine : {machine}")
-        print("="*50)
-        print(f"Ports ouverts          : {row['ports_ouverts']}")
-        print(f"Labels prédits         : {labels_dict}")
-        print(f"Besoins métiers assignés : {business_needs}")
+        X_new = build_feature_matrix(df_scan, all_ports_train)
+        print(f"\n[INFO] X_new shape = {X_new.shape} pour {len(df_scan)} machine(s) scannée(s).")
     
-    # ----------------------------------------------------------------------------
-    # Scan de sécurité Nmap avec script NSE
-    # ----------------------------------------------------------------------------
-    nse_script = input("\nNom du script NSE à utiliser pour le scan de sécurité (ex: vuln, http-enum) : ")
-    port_range_sec = input("Plage de ports pour le scan de sécurité (ex: 1-65535) : ")
+        y_pred_new = model_cc.predict(X_new)
+        for i, row in df_scan.iterrows():
+            machine = row['machine']
+            pred_vector = y_pred_new[i]
+            labels_dict = {label_cols[j]: bool(pred_vector[j]) for j in range(len(label_cols))}
+            business_needs = assign_business_need(labels_dict)
+            print("\n" + "=" * 50)
+            print(f"Machine : {machine}")
+            print("=" * 50)
+            print(f"Ports ouverts           : {row['ports_ouverts']}")
+            print(f"Labels prédits          : {labels_dict}")
+            print(f"Besoins métiers assignés: {business_needs}")
     
-    for i, row in df_scan.iterrows():
-        machine = row['machine']
-        sec_scan_result = launch_nmap_security_scan(machine, port_range_sec, nse_script)
-        print("\n" + "="*50)
-        print(f"Scan de sécurité pour la machine : {machine}")
-        print("="*50)
-        pretty_print_dict(sec_scan_result, title="Résultat du scan de sécurité")
+        # ----------------------------------------------------------------------------
+        # Scan de sécurité Nmap avec script NSE
+        # ----------------------------------------------------------------------------
+        nse_script = get_nse_script_input("\nNom du script NSE à utiliser pour le scan de sécurité (ex: vuln, http-enum) : ")
+        port_range_sec = get_port_range_input("Plage de ports pour le scan de sécurité (ex: 1-65535) : ")
+    
+        for i, row in df_scan.iterrows():
+            machine = row['machine']
+            sec_scan_result = launch_nmap_security_scan(machine, port_range_sec, nse_script)
+            print("\n" + "=" * 50)
+            print(f"Scan de sécurité pour la machine : {machine}")
+            print("=" * 50)
+            pretty_print_dict(sec_scan_result, title="Résultat du scan de sécurité")
+    
+    except Exception as e:
+        print(f"[FATAL ERROR] Une erreur inattendue s'est produite : {e}")
+
 
 if __name__ == "__main__":
     main()
