@@ -19,7 +19,8 @@ def assign_business_need(labels: dict) -> list:
         "ERPNext": "ERP / Gestion d'entreprise",
         "Metabase": "Business Intelligence",
         "Bob50": "Application métier Bob50",
-        "HyperPlanning": "Gestion de planning"
+        "HyperPlanning": "Gestion de planning",
+        "GitLab": "Gestion de code source"
     }
     needs = []
     for label, is_present in labels.items():

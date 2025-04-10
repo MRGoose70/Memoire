@@ -30,7 +30,7 @@ def main():
 
     # Construction des matrices de features et labels
     label_cols = ["Web", "BaseDeDonnees", "Messagerie", "Fichier", "DNS", "Monitoring",
-                  "Proxy", "Odoo", "ERPNext", "Metabase", "Bob50", "HyperPlanning"]
+                  "Proxy", "Odoo", "ERPNext", "Metabase", "Bob50", "HyperPlanning", "GitLab"]
     X = build_feature_matrix(df_train, all_ports_train)
     y, label_cols = build_label_matrix(df_train, label_cols)
     logger.info("Matrice de features: %s, Matrice de labels: %s", X.shape, y.shape)

@@ -27,7 +27,8 @@ def create_large_training_dataset(n=2000, seed=42) -> pd.DataFrame:
         "ERPNext": [8000, 8001, 8002],
         "Metabase": [3000, 3001, 3002],
         "Bob50": [6262],
-        "HyperPlanning": [21200]
+        "HyperPlanning": [21200],
+        "GitLab": [80, 443, 22],
     }
     all_possible_ports = {port for plist in possible_ports.values() for port in plist}
 
