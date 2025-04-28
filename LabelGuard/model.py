@@ -1,37 +1,51 @@
 """
 Module de gestion du modèle.
-Contient les fonctions pour entraîner le modèle ClassifierChain et pour l'évaluer.
+Ajout : Hamming-loss et F1-macro.
 """
 
 from sklearn.multioutput import ClassifierChain
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import (
+    accuracy_score,
+    hamming_loss,
+    f1_score,
+)
 from sklearn.model_selection import cross_val_score, KFold
 import numpy as np
 
+
 def train_classifier_chain(X_train: np.ndarray, y_train: np.ndarray) -> ClassifierChain:
-    """
-    Entraîne un modèle ClassifierChain avec LogisticRegression comme estimateur de base.
-    """
     base_estimator = LogisticRegression(max_iter=1000)
-    model = ClassifierChain(base_estimator=base_estimator, order='random', random_state=42)
+    model = ClassifierChain(
+        base_estimator=base_estimator, order="random", random_state=42
+    )
     model.fit(X_train, y_train)
     return model
 
-def evaluate_model(model: ClassifierChain, X_test: np.ndarray, y_test: np.ndarray, label_cols: list) -> tuple:
+
+def evaluate_model(
+    model: ClassifierChain, X_test: np.ndarray, y_test: np.ndarray, label_cols: list
+) -> tuple:
     """
-    Évalue le modèle sur le jeu de test et renvoie la précision et les prédictions.
+    Renvoie : accuracy, hamming-loss, f1-macro, prédictions
     """
     y_pred = model.predict(X_test)
+
     acc = accuracy_score(y_test, y_pred)
-    return acc, y_pred
+    h_loss = hamming_loss(y_test, y_pred)
+    f1_macro = f1_score(y_test, y_pred, average="macro")
+
+    return acc, h_loss, f1_macro, y_pred
+
 
 def cross_validate_model(X: np.ndarray, y: np.ndarray) -> float:
     """
-    Effectue une validation croisée 5-fold et renvoie la précision moyenne.
+    Validation croisée 5-fold sur la F1-macro (plus pertinente que l'accuracy).
     """
     base_estimator = LogisticRegression(max_iter=1000)
-    model = ClassifierChain(base_estimator=base_estimator, order='random', random_state=42)
+    model = ClassifierChain(
+        base_estimator=base_estimator, order="random", random_state=42
+    )
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    cv_scores = cross_val_score(model, X, y, cv=kf, scoring='accuracy')
+    cv_scores = cross_val_score(model, X, y, cv=kf, scoring="f1_macro")
     return cv_scores.mean()
