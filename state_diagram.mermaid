@@ -1,0 +1,26 @@
+stateDiagram-v2
+
+network_scan: Scan du réseau
+port_scan: Scan des ports de la machine
+host_down: La machine n'est pas joignable
+training: Entrainement du modèle
+collect: Collect des ports ouverts
+analyze: Analyse des ports par le modèle
+app: Attribution des labels applicatifs
+work: Attribution des labels métiers
+security_scan: Lancement du scan de sécurité
+
+state is_up <<choice>>
+
+    [*] --> training
+    training --> network_scan
+    network_scan --> is_up
+    is_up --> port_scan: Machine en ligne
+    is_up --> host_down: Machine hors ligne
+    host_down --> [*]
+    port_scan --> collect
+    collect --> analyze
+    analyze --> app
+    app --> work
+    work --> security_scan
+    security_scan --> [*]
