@@ -44,14 +44,22 @@ def main():
     # Séparation train/test et entraînement du modèle
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     model = train_classifier_chain(X_train, y_train)
-    test_accuracy, test_hloss, test_f1, y_pred = evaluate_model(
-    model, X_test, y_test, label_cols
-    )
-    logger.info(
-        "Test set — Accuracy: %.4f | Hamming-loss: %.4f | F1-macro: %.4f",
+    (
         test_accuracy,
         test_hloss,
         test_f1,
+        (ci_low, ci_high),
+        y_pred,
+    ) = evaluate_model(model, X_test, y_test, label_cols)
+
+    logger.info(
+        "Test set — Acc: %.4f | Hamming: %.4f | F1-macro: %.4f "
+        "(95%% CI [%.4f – %.4f])",
+        test_accuracy,
+        test_hloss,
+        test_f1,
+        ci_low,
+        ci_high,
     )
 
 
