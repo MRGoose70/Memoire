@@ -12,7 +12,6 @@ from scanner import launch_nmap_scan, parse_scan_result, launch_nmap_security_sc
 from utils import get_ip_input, get_port_range_input, get_scan_options_input, get_nse_script_input
 from business import add_business_need_column, assign_business_need
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import hamming_loss, f1_score
 
 
 def main():
@@ -20,7 +19,7 @@ def main():
     logger = logging.getLogger(__name__)
 
     # Génération du dataset synthétique
-    df_train = create_large_training_dataset(n=2000, seed=42)
+    df_train = create_large_training_dataset(n=4082, seed=42)
     logger.info("Dataset d'entraînement généré avec %d enregistrements", df_train.shape[0])
 
     # Ajout de la colonne 'besoin_metier'

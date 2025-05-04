@@ -7,7 +7,7 @@ import random
 import pandas as pd
 import numpy as np
 
-def create_large_training_dataset(n=2000, seed=42) -> pd.DataFrame:
+def create_large_training_dataset(n=4080, seed=42) -> pd.DataFrame:
     """
     Génère un DataFrame simulant n machines avec :
       - machine: adresse IP fictive,
