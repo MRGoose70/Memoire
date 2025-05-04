@@ -13,12 +13,13 @@ from utils import get_ip_input, get_port_range_input, get_scan_options_input, ge
 from business import add_business_need_column, assign_business_need
 from sklearn.model_selection import train_test_split
 
+
 def main():
     logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
     logger = logging.getLogger(__name__)
 
     # Génération du dataset synthétique
-    df_train = create_large_training_dataset(n=2000, seed=42)
+    df_train = create_large_training_dataset(n=4082, seed=42)
     logger.info("Dataset d'entraînement généré avec %d enregistrements", df_train.shape[0])
 
     # Ajout de la colonne 'besoin_metier'
@@ -36,14 +37,30 @@ def main():
     logger.info("Matrice de features: %s, Matrice de labels: %s", X.shape, y.shape)
 
     # Validation croisée et évaluation du modèle
-    cv_accuracy = cross_validate_model(X, y)
-    logger.info("Précision moyenne en validation croisée (5-fold): %.4f", cv_accuracy)
+    cv_f1 = cross_validate_model(X, y)
+    logger.info("F1-macro moyenne en validation croisée (5-fold): %.4f", cv_f1)
 
     # Séparation train/test et entraînement du modèle
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     model = train_classifier_chain(X_train, y_train)
-    test_accuracy, y_pred = evaluate_model(model, X_test, y_test, label_cols)
-    logger.info("Précision sur le jeu de test: %.4f", test_accuracy)
+    (
+        test_accuracy,
+        test_hloss,
+        test_f1,
+        (ci_low, ci_high),
+        y_pred,
+    ) = evaluate_model(model, X_test, y_test, label_cols)
+
+    logger.info(
+        "Test set — Acc: %.4f | Hamming: %.4f | F1-macro: %.4f "
+        "(95%% CI [%.4f – %.4f])",
+        test_accuracy,
+        test_hloss,
+        test_f1,
+        ci_low,
+        ci_high,
+    )
+
 
     # Scan Nmap classique et prédiction sur de nouvelles machines
     target_ip = get_ip_input("Entrez l'IP à scanner : ")
