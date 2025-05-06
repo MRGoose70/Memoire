@@ -1,5 +1,6 @@
 stateDiagram-v2
 
+generation: Génération d'un dataset d'entrainement
 network_scan: Scan du réseau
 port_scan: Scan des ports de la machine
 host_down: La machine n'est pas joignable
@@ -12,7 +13,8 @@ security_scan: Lancement du scan de sécurité
 
 state is_up <<choice>>
 
-    [*] --> training
+    [*] --> generation
+    generation --> training
     training --> network_scan
     network_scan --> is_up
     is_up --> port_scan: Machine en ligne
