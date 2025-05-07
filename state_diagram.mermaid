@@ -10,6 +10,7 @@ analyze: Analyse des ports par le modèle
 app: Attribution des labels applicatifs
 work: Attribution des labels métiers
 security_scan: Lancement du scan de sécurité
+doc: Création de la documentation / Affichage des résultats
 
 state is_up <<choice>>
 
@@ -25,4 +26,5 @@ state is_up <<choice>>
     analyze --> app
     app --> work
     work --> security_scan
-    security_scan --> [*]
+    security_scan --> doc
+    doc --> [*]
