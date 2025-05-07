@@ -3,6 +3,7 @@
 Main entry point for the LabelGuard application.
 Coordinates dataset generation, model training/evaluation, and network scanning.
 Modified to log output both to console and to `output.txt` for readability.
+Made with the help of OpenAI's ChatGPT.
 """
 
 import logging
