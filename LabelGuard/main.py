@@ -2,6 +2,7 @@
 """
 Main entry point for the LabelGuard application.
 Coordinates dataset generation, model training/evaluation, and network scanning.
+Modified to log output both to console and to `output.txt` for readability.
 """
 
 import logging
@@ -12,12 +13,36 @@ from scanner import launch_nmap_scan, parse_scan_result, launch_nmap_security_sc
 from utils import get_ip_input, get_port_range_input, get_scan_options_input, get_nse_script_input
 from business import add_business_need_column, assign_business_need
 from sklearn.model_selection import train_test_split
+from datetime import datetime
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+    # ----------------------------------------------------------------
+    # Configure logging to output to both console and a file
+    # ----------------------------------------------------------------
     logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
 
+    # Create formatter with timestamp, level, and message
+    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+    # Console handler (stdout)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+
+    # File handler (writes to output.txt)
+    fh = logging.FileHandler(f"Rapport_du_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt", encoding='utf-8')
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(formatter)
+
+    # Add handlers to the logger
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+
+    # ----------------------------------------------------------------
+    # Start of application logic
+    # ----------------------------------------------------------------
     # Génération du dataset synthétique
     df_train = create_large_training_dataset(n=4082, seed=42)
     logger.info("Dataset d'entraînement généré avec %d enregistrements", df_train.shape[0])
