@@ -8,7 +8,7 @@ Made with the help of OpenAI's ChatGPT.
 
 import logging
 import sys
-from data import create_large_training_dataset, build_feature_matrix, build_label_matrix
+from data import create_large_training_dataset, build_feature_matrix, build_label_matrix, add_label_noise
 from model import train_classifier_chain, evaluate_model, cross_validate_model
 from scanner import launch_nmap_scan, parse_scan_result, launch_nmap_security_scan
 from utils import get_ip_input, get_port_range_input, get_scan_options_input, get_nse_script_input
@@ -62,20 +62,31 @@ def main():
     y, label_cols = build_label_matrix(df_train, label_cols)
     logger.info("Matrice de features: %s, Matrice de labels: %s", X.shape, y.shape)
 
+    # Injecter 10% de bruit
+    y_noisy = add_label_noise(y, error_rate=0.10, random_state=42)
+    cv_f1  = cross_validate_model(X, y_noisy)
+    
     # Validation croisée et évaluation du modèle
-    cv_f1 = cross_validate_model(X, y)
+    cv_f1 = cross_validate_model(X, y_noisy)
     logger.info("F1-macro moyenne en validation croisée (5-fold): %.4f", cv_f1)
 
     # Séparation train/test et entraînement du modèle
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model = train_classifier_chain(X_train, y_train)
+
+    # On ajoute 10% de bruit sur les étiquettes d'entraînement
+    y_train_noisy = add_label_noise(y_train, error_rate=0.10, random_state=42)
+
+    # On ajoute aussi 10% de bruit sur le jeu de test
+    y_test_noisy  = add_label_noise(y_test,  error_rate=0.10, random_state=42)
+
+    model = train_classifier_chain(X_train, y_train_noisy)
     (
         test_accuracy,
         test_hloss,
         test_f1,
         (ci_low, ci_high),
         y_pred,
-    ) = evaluate_model(model, X_test, y_test, label_cols)
+    ) = evaluate_model(model, X_test, y_test_noisy, label_cols)
 
     logger.info(
         "Test set — Acc: %.4f | Hamming: %.4f | F1-macro: %.4f "
