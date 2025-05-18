@@ -70,3 +70,21 @@ def build_label_matrix(df: pd.DataFrame, label_columns: list):
             df_labels[col] = False
     df_labels = df_labels[label_columns]
     return df_labels.values.astype(int), label_columns
+
+def add_label_noise(
+    y: np.ndarray,
+    error_rate: float = 0.1,
+    random_state: int = None
+) -> np.ndarray:
+    """
+    Retourne une copie de y où chaque entrée a une probabilité `error_rate`
+    d'être inversée (0->1 ou 1->0), pour simuler un taux d'erreur.
+    """
+    if random_state is not None:
+        np.random.seed(random_state)
+
+    y_noisy = y.copy()
+    rand = np.random.rand(*y_noisy.shape)
+    flip_mask = rand < error_rate
+    y_noisy[flip_mask] = 1 - y_noisy[flip_mask]
+    return y_noisy
